@@ -27,7 +27,7 @@ def melo_wrapper(mode, k, bias, smooth, regress, verbose=False):
 
     """
     values, commutes, lines = {
-        'spread': (spreads, False, np.arange(-60.5, 61.5)),
+        'spread': (spreads, False, np.arange(-80.5, 81.5)),
         'total': (totals, True, np.arange(-115.5, 300.5)),
     }[mode]
 
@@ -58,20 +58,20 @@ def from_cache(mode, retrain=False, **kwargs):
 
     bounds = {
         'spread': [
-            (0.0,    0.5),
+            (0.0,    0.3),
             (0.0,    0.5),
             (0.0,   15.0),
             (0.0,    0.5),
         ],
         'total': [
-            (0.0,    0.5),
+            (0.0,    0.3),
             (-0.01, 0.01),
             (0.0,   15.0),
             (0.0,    0.5),
         ],
     }[mode]
 
-    res = gp_minimize(obj, bounds, n_calls=40, n_jobs=4, verbose=True)
+    res = gp_minimize(obj, bounds, n_calls=100, n_jobs=4, verbose=True)
 
     print("mode: {}".format(mode))
     print("best mean absolute error: {:.4f}".format(res.fun))
