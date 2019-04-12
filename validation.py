@@ -21,6 +21,10 @@ axl.plot(x, y, color='black')
 residuals = ncaabb_spreads.residuals(standardize=True)
 axl.hist(residuals, bins=40, histtype='step', density=True)
 
+# residual stats
+#print('mean:', residuals.mean())
+#print('root mean square:', np.sqrt(np.square(residuals).mean()))
+
 # residual figure attributes
 axl.set_xlim(-4, 4)
 axl.set_ylim(0, .45)
@@ -29,8 +33,7 @@ axl.set_title('Standardized residuals')
 
 # quantiles
 axr.axhline(1, color='black')
-axr.hist(ncaabb_spreads.quantiles(), bins=40,
-         histtype='step', density=True)
+axr.hist(ncaabb_spreads.quantiles(), bins=40, histtype='step', density=True)
 
 # quantile figure attributes
 axr.set_xlim(0, 1)

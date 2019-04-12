@@ -1,107 +1,52 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
-
-import numpy as np
-from skopt import gp_minimize
-
 from melo import Melo
-from ncaabb_games import games
-from xdg import XDG_DATA_HOME
+from ncaabb_games import games as g
+import numpy as np
+from pyDOE import lhs
 
 
-cachedir = Path(XDG_DATA_HOME, 'nba')
-cachedir.mkdir(parents=True, exist_ok=True)
-cachefile = cachedir / 'games.pkl'
+def design(bounds, samples):
+    """
+    Latin hypercube experiment design
 
-dates = games['date']
-labels1 = games['home_team']
-labels2 = games['away_team']
-spreads = games['home_points'] - games['away_points']
-totals = games['home_points'] + games['away_points']
+    """
+    xmin, xmax = map(np.array, zip(*bounds))
+    ndim = len(bounds)
+
+    return xmin + (xmax - xmin) * lhs(ndim, samples=samples)
 
 
-def melo_wrapper(mode, k, bias, smooth, regress, verbose=False):
+def melo_wrapper(k, bias, smooth, regress):
     """
     Wrapper to pass arguments to the Melo library.
 
     """
-    values, commutes, lines = {
-        'spread': (spreads, False, np.arange(-80.5, 81.5)),
-        'total': (totals, True, np.arange(-115.5, 300.5)),
-    }[mode]
+    print(k, bias, smooth, regress)
 
-    biases = bias * np.logical_not(games['neutral'])
+    bias *= np.logical_not(g.neutral)
 
     return Melo(
-        dates, labels1, labels2, values, lines=lines,
-        k=k, biases=biases, smooth=smooth, commutes=commutes,
-        regress=lambda t: regress if t > np.timedelta64(12, 'W') else 0
+        g.date, g.home_team, g.away_team, g.home_points - g.away_points,
+        lines=np.arange(-70.5, 71.5), k=k, bias=bias, smooth=smooth,
+        regress=lambda t: regress*(t > 3), regress_unit='month'
     )
 
 
-def from_cache(mode, retrain=False, **kwargs):
+def optimize(bounds, samples=50):
     """
-    Load the melo args from the cache if available, otherwise
-    train and cache a new instance.
+    Estimate optimal model parameters using cross entropy
 
     """
-    cachefile = cachedir / '{}.cache'.format(mode.lower())
+    X = design(bounds, samples=samples)
+    y = [melo_wrapper(*x).entropy for x in X]
 
-    if not retrain and cachefile.exists():
-        args = np.loadtxt(cachefile)
-        return melo_wrapper(mode, *args)
-
-    def obj(args):
-        melo = melo_wrapper(mode, *args)
-        return melo.entropy()
-
-    bounds = {
-        'spread': [
-            (0.0,    0.3),
-            (0.0,    0.5),
-            (0.0,   15.0),
-            (0.0,    0.5),
-        ],
-        'total': [
-            (0.0,    0.3),
-            (-0.01, 0.01),
-            (0.0,   15.0),
-            (0.0,    0.5),
-        ],
-    }[mode]
-
-    res = gp_minimize(obj, bounds, n_calls=100, n_jobs=4, verbose=True)
-
-    print("mode: {}".format(mode))
-    print("best mean absolute error: {:.4f}".format(res.fun))
-    print("best parameters: {}".format(res.x))
-
-    if not cachefile.parent.exists():
-        cachefile.parent.mkdir()
-
-    np.savetxt(cachefile, res.x)
-    return melo_wrapper(mode, *res.x)
+    return X[np.argmin(y)]
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description='calibrate model parameters for point spreads and totals',
-        argument_default=argparse.SUPPRESS
-    )
-
-    parser.add_argument(
-        '--retrain', action='store_true', default=False,
-        help='retrain even if model args are cached'
-    )
-
-    args = parser.parse_args()
-    kwargs = vars(args)
-
-    for mode in 'spread', 'total':
-        from_cache(mode, **kwargs)
+    bounds = [(0, 0.5), (0, 0.5), (0, 15), (0, 0.5)]
+    args = optimize(bounds, samples=1000)
+    print(args)
 else:
-    ncaabb_spreads = from_cache('spread')
-    ncaabb_totals = from_cache('total')
+    ncaabb_spreads = melo_wrapper(.286, .38, 4.0, 0.03)
